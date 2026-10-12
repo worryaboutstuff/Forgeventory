@@ -596,17 +596,21 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     min-width: 180px;
     padding: 4px 0;
+    color: #edf0f5;
     animation: sg-fade-in 0.1s ease;
 }
 @keyframes sg-fade-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 .sg-ctx-item {
     padding: 8px 14px;
     font-size: 13px;
-    color: var(--body-text-color, #d1d5db);
+    color: #edf0f5;
     cursor: pointer;
     transition: background 0.1s;
 }
-.sg-ctx-item:hover { background: var(--button-secondary-background-fill-hover, #374151); }
+.sg-ctx-item:hover {
+    background: var(--button-secondary-background-fill-hover, #374151);
+    color: #fff;
+}
 
 /* ---- Editor Modal ---- */
 .sg-editor-overlay {
@@ -927,7 +931,8 @@ button.sg-csv-editor-btn-disabled,
 .gradio-container.light .sg-source-dropdown-item:hover, .light .sg-source-dropdown-item:hover { background: #f3f4f6 !important; }
 .gradio-container.light .sg-source-dropdown-item.sg-active, .light .sg-source-dropdown-item.sg-active { background: var(--color-accent, #6366f1) !important; color: #fff !important; }
 .gradio-container.light .sg-context-menu, .light .sg-context-menu { background: #fff; border-color: #e5e7eb; }
-.gradio-container.light .sg-ctx-item:hover, .light .sg-ctx-item:hover { background: #f3f4f6; }
+.gradio-container.light .sg-ctx-item, .light .sg-ctx-item { color: #111827; }
+.gradio-container.light .sg-ctx-item:hover, .light .sg-ctx-item:hover { background: #f3f4f6; color: #030712; }
 .gradio-container.light .sg-editor-modal, .light .sg-editor-modal { background: #fff; }
 .gradio-container.light .sg-editor-input, .light .sg-editor-input { background: #fff; border-color: #d1d5db; color: #111827; }
 .gradio-container.light .sg-editor-textarea, .light .sg-editor-textarea { background: #fff; border-color: #d1d5db; color: #111827; }
