@@ -1,0 +1,70 @@
+# Python caches and local tooling
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# JavaScript dependencies and logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output other than the UI bundle Forge loads
+dist/
+!ui/dist/
+build/
+
+# Local style additions and generated previews. The initial frozen CSVs and their
+# exact card thumbnails are already tracked; new local files remain ignored.
+styles/*.csv
+samples/
+data/thumbnails/
+data/*_previews/
+data/preview_settings.json
+
+# Private runtime state
+data/backups/
+data/usage.json
+data/category_order.json
+data/presets.json
+data/preset_thumbnails/
+data/lora_tags.json
+data/lora_tags.json.tmp
+data/ui_preferences.json
+data/ui_preferences.json.tmp
+
+# LoRA binaries belong in Forge model directories, never in this repository
+*.safetensors
+*.ckpt
+*.pt
+loras/
+models/Lora/
+
+# Local environment and editor files
+.env
+.env.local
+*.local
+config.local.*
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local release marker
+.style-grid-public-export
