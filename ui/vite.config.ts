@@ -26,10 +26,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/style_grid': 'http://127.0.0.1:7860',
-      '/extensions/sd-webui-style-organizer/ui/dist': {
+      '/extensions/Forgeventory/ui/dist': {
         target: 'http://127.0.0.1:5173',
         rewrite: (p) => p.replace(
-          '/extensions/sd-webui-style-organizer/ui/dist', ''
+          '/extensions/Forgeventory/ui/dist', ''
         )
       }
     }

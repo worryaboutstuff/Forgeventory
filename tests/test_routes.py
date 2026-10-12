@@ -479,3 +479,23 @@ def test_lora_rename_route_can_unload_and_refresh(style_grid_client, monkeypatch
     assert (root / "after.safetensors").is_file()
     assert (root / "after.preview.png").is_file()
     assert style_grid_client.get("/style_grid/loras").json()["loras"][0]["name"] == "after"
+
+
+def test_ui_html_uses_installed_extension_folder(monkeypatch, tmp_path):
+    from stylegrid import routes
+
+    extension_root = tmp_path / "Forgeventory"
+    dist_dir = extension_root / "ui" / "dist"
+    dist_dir.mkdir(parents=True)
+    (dist_dir / "index.html").write_text(
+        '<script src="./assets/index.js"></script>'
+        '<link rel="stylesheet" href="./assets/index.css">',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(routes, "EXT_DIR", str(extension_root))
+
+    html = routes._get_ui_html()
+
+    assert "/file=extensions/Forgeventory/ui/dist/assets/index.js?v=" in html
+    assert "/file=extensions/Forgeventory/ui/dist/assets/index.css?v=" in html
+    assert "sd-webui-style-organizer/ui/dist" not in html

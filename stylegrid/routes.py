@@ -14,6 +14,7 @@ import sys
 import time
 import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import HTTPException, Request  # type: ignore[reportMissingImports]
 from fastapi.responses import (  # type: ignore[reportMissingImports]
@@ -1077,10 +1078,12 @@ def _get_ui_html() -> str:
     Load built UI index.html and rewrite every relative asset URL (src/href="./...")
     to the Gradio file URL with a fresh ?v= cache buster on each call.
     """
-    html_path = Path(__file__).parent.parent / "ui" / "dist" / "index.html"
+    extension_root = Path(EXT_DIR)
+    html_path = extension_root / "ui" / "dist" / "index.html"
     html = html_path.read_text(encoding="utf-8")
     v = str(int(time.time()))
-    base = "/file=extensions/sd-webui-style-organizer/ui/dist"
+    extension_folder = quote(extension_root.name, safe="")
+    base = f"/file=extensions/{extension_folder}/ui/dist"
     pattern = re.compile(
         r'(?P<attr>\b(?:src|href))=(?P<q>["\'])(?P<path>\./[^"\']+)(?P=q)',
         re.IGNORECASE,

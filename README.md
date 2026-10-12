@@ -28,12 +28,12 @@ Git LFS is required for the compiled UI fonts and for any preview images that co
 ```powershell
 git lfs install
 cd A:\path\to\Forge\extensions
-git clone https://github.com/worryaboutstuff/Forgeventory.git sd-webui-style-organizer
+git clone https://github.com/worryaboutstuff/Forgeventory.git Forgeventory
 ```
 
 Restart Forge after installing or updating the extension. Node.js is not required for normal use because the compiled interface is included under `ui/dist`.
 
-The destination folder must be named `sd-webui-style-organizer` because the backend serves the interface from that extension path.
+Forgeventory derives the compiled-interface URL from its installed directory. `Forgeventory` is the standard folder name, while the legacy `sd-webui-style-organizer` name remains compatible for existing installations.
 
 ## Included and local styles
 
