@@ -2,6 +2,7 @@
 
 ## Public release
 
+- Added a current GitHub README interface tour covering the Style library, context menus, Library Tools, presets, scene management, and LoRA browser.
 - Added portable `.forgeventory` sharing for individual Styles and flattened presets, with optional embedded previews, recipient-chosen categories/tags, and safe duplicate handling.
 - Made the extension folder-independent and standardized new installations on the `Forgeventory` directory name while preserving compatibility with legacy checkout names.
 - Added prompt-neutral Style organizer tags with sidebar single/multi-tag filtering, three-state batch editing, paired prompt-format synchronization, and right-click global rename.

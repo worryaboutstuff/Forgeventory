@@ -4,7 +4,7 @@ Forgeventory replaces Forge's style dropdown with a visual, searchable prompt li
 
 This is a substantially modified fork of [Style Grid for Forge by KazeKaze93](https://github.com/KazeKaze93/sd-webui-style-organizer). See [NOTICE.md](NOTICE.md) for attribution and modification information.
 
-![Forgeventory interface showing category navigation and visual style cards](docs/forgeventory-overview.png)
+![Forgeventory interface showing category navigation and visual style cards](screenshots/Main_UI.jpg)
 
 ## Features
 
@@ -21,6 +21,52 @@ This is a substantially modified fork of [Style Grid for Forge by KazeKaze93](ht
 - `txt2img` and `img2img` support
 - CSV backup, import, and export tools
 - A shortcut for opening Forge's LoRA folder
+
+## Interface tour
+
+### Style library and tools
+
+<table>
+  <tr>
+    <td width="67%"><img src="screenshots/Main_UI_Menu.jpg" alt="Forgeventory Style card context menu"></td>
+    <td width="33%"><img src="screenshots/Main_Menu.jpg" alt="Forgeventory Library Tools menu"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Style actions include prompt editing, sharing, category changes, and preview management.</sub></td>
+    <td align="center"><sub>Display controls and library-wide tools.</sub></td>
+  </tr>
+</table>
+
+### Presets and scenes
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/Presets_UI.jpg" alt="Forgeventory preset library"></td>
+    <td width="50%"><img src="screenshots/Presets_UI_Menu.jpg" alt="Forgeventory preset context menu"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Browse saved scenes by one or several categories.</sub></td>
+    <td align="center"><sub>Load, revise, organize, share, and assign images to presets.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="screenshots/Manage_Templates.jpg" alt="Forgeventory scene and template manager" width="70%">
+</p>
+<p align="center"><sub>Save and search complete positive and negative prompt scenes.</sub></p>
+
+### LoRA browser
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/LoRA_UI.jpg" alt="Forgeventory LoRA browser"></td>
+    <td width="50%"><img src="screenshots/LoRA_UI_Menu.jpg" alt="Forgeventory LoRA context menu"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Browse Forge's configured LoRA folders with local organizer tags.</sub></td>
+    <td align="center"><sub>Apply LoRAs, edit Forge metadata, rename bundles, and manage tags.</sub></td>
+  </tr>
+</table>
 
 ## Installation
 
