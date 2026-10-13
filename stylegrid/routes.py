@@ -35,6 +35,7 @@ from stylegrid.config import (
     EXT_DIR,
     PRESET_THUMBNAILS_DIR,
     THUMBNAILS_DIR,
+    get_all_styles_file_paths,
     get_lora_dir,
 )
 from stylegrid.csv_io import (
@@ -67,6 +68,18 @@ from stylegrid.loras import (
     save_lora_tags,
     validate_lora_stem,
 )
+from stylegrid.sharing import (
+    MAX_PACKAGE_BYTES,
+    MAX_PREVIEW_BYTES,
+    SharePackageError,
+    build_preset_manifest,
+    build_style_manifest,
+    create_share_package,
+    prompt_format,
+    read_share_package,
+    safe_package_filename,
+    source_family,
+)
 from stylegrid.thumbnails import (
     _thumbnail_hash_input,
     get_thumbnail_path,
@@ -75,6 +88,91 @@ from stylegrid.thumbnails import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _decode_shared_package(data: dict) -> tuple[dict, bytes | None]:
+    encoded = data.get("package", "")
+    if not isinstance(encoded, str) or not encoded:
+        raise SharePackageError("Choose a .forgeventory file")
+    if "," in encoded:
+        encoded = encoded.split(",", 1)[1]
+    if len(encoded) > ((MAX_PACKAGE_BYTES * 4 // 3) + 16):
+        raise SharePackageError("Shared-item package is too large")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as error:
+        raise SharePackageError("Shared-item package is not valid Base64") from error
+    return read_share_package(raw)
+
+
+def _preset_thumbnail_path(name: str) -> str:
+    safe = hashlib.md5(name.encode("utf-8")).hexdigest()
+    return os.path.join(PRESET_THUMBNAILS_DIR, safe + ".webp")
+
+
+def _load_share_preview(paths) -> bytes | None:
+    """Return the first valid, size-limited WebP preview without blocking export."""
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, "rb") as image_file:
+                preview = image_file.read(MAX_PREVIEW_BYTES + 1)
+        except OSError:
+            continue
+        if (
+            len(preview) <= MAX_PREVIEW_BYTES
+            and preview.startswith(b"RIFF")
+            and len(preview) >= 12
+            and preview[8:12] == b"WEBP"
+        ):
+            return preview
+    return None
+
+
+def _style_share_targets(item_name: str = "") -> list[dict]:
+    """Describe local CSV destinations without exposing absolute paths to the browser."""
+    groups = {}
+    for filepath in get_all_styles_file_paths():
+        fmt = prompt_format(filepath)
+        family = source_family(filepath)
+        key = (
+            ("paired", family.casefold())
+            if fmt != "generic"
+            else ("single", os.path.basename(filepath).casefold())
+        )
+        group = groups.setdefault(key, {"label": family or "Prompt formats", "sources": {}})
+        group["sources"][fmt] = filepath
+
+    cached_styles = get_cached_styles()
+    targets = []
+    for group in groups.values():
+        sources = group["sources"]
+        source_keys = {os.path.normcase(os.path.abspath(path)) for path in sources.values()}
+        digest_input = "|".join(sorted(source_keys))
+        target_id = hashlib.sha256(digest_input.encode("utf-8")).hexdigest()[:16]
+        formats = [fmt for fmt in ("natural_language", "tags", "generic") if fmt in sources]
+        conflict = any(
+            style.get("name") == item_name
+            and os.path.normcase(os.path.abspath(style.get("source_file") or "")) in source_keys
+            for style in cached_styles
+        )
+        targets.append({
+            "id": target_id,
+            "label": group["label"],
+            "formats": formats,
+            "conflict": conflict,
+            "_sources": sources,
+        })
+    targets.sort(key=lambda target: target["label"].casefold())
+    return targets
+
+
+def _public_style_targets(item_name: str = "") -> list[dict]:
+    return [
+        {key: value for key, value in target.items() if not key.startswith("_")}
+        for target in _style_share_targets(item_name)
+    ]
 
 
 def _parse_category_patch(data: dict):
@@ -1104,6 +1202,224 @@ def _register_ui_routes(app):
         return HTMLResponse(content=_get_ui_html())
 
 
+def _register_share_routes(app):
+    """Register portable single-style and flattened-preset sharing routes."""
+
+    def package_response(package: bytes, item_name: str) -> Response:
+        filename = safe_package_filename(item_name)
+        return Response(
+            content=package,
+            media_type="application/vnd.forgeventory.item+zip",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.get("/style_grid/share/style")
+    async def api_export_shared_style(name: str = "", source: str = ""):
+        try:
+            manifest, source_rows = build_style_manifest(get_cached_styles(), name.strip(), source)
+            preview = None
+            candidates = [
+                get_thumbnail_path(name.strip(), row.get("source_file") or "")
+                for row in source_rows
+            ]
+            candidates.append(get_thumbnail_path(name.strip()))
+            preview = _load_share_preview(candidates)
+            return package_response(create_share_package(manifest, preview), manifest["item"]["name"])
+        except SharePackageError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @app.get("/style_grid/share/preset")
+    async def api_export_shared_preset(name: str = "", source: str = ""):
+        presets = load_presets()
+        preset_name = name.strip()
+        if not preset_name or preset_name not in presets:
+            raise HTTPException(status_code=404, detail="Preset not found")
+        try:
+            manifest = build_preset_manifest(
+                preset_name,
+                presets[preset_name],
+                get_cached_styles(),
+                source,
+            )
+            preview_path = _preset_thumbnail_path(preset_name)
+            preview = _load_share_preview([preview_path])
+            return package_response(create_share_package(manifest, preview), preset_name)
+        except SharePackageError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @app.post("/style_grid/share/inspect")
+    async def api_inspect_shared_item(data: dict):
+        try:
+            manifest, preview = _decode_shared_package(data)
+        except SharePackageError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        item = manifest["item"]
+        response = {
+            "ok": True,
+            "kind": manifest["kind"],
+            "name": item["name"],
+            "description": item.get("description", ""),
+            "has_preview": preview is not None,
+        }
+        if manifest["kind"] == "style":
+            styles = get_cached_styles()
+            response.update({
+                "suggested_category": item.get("suggested_category", ""),
+                "suggested_tags": item.get("suggested_tags", []),
+                "variant_formats": [variant["format"] for variant in item["variants"]],
+                "targets": _public_style_targets(item["name"]),
+                "existing_categories": sorted({
+                    str(style.get("category") or "").strip()
+                    for style in styles
+                    if str(style.get("category") or "").strip()
+                }, key=str.casefold),
+                "existing_tags": sorted({
+                    str(tag).strip()
+                    for style in styles
+                    for tag in (style.get("organizer_tags") or [])
+                    if str(tag).strip()
+                }, key=str.casefold),
+            })
+        else:
+            presets = load_presets()
+            existing_categories = set()
+            for preset in presets.values():
+                if not isinstance(preset, dict):
+                    continue
+                values = preset.get("categories", preset.get("category", []))
+                if isinstance(values, str):
+                    values = [values]
+                if isinstance(values, list):
+                    existing_categories.update(str(value).strip() for value in values if str(value).strip())
+            response.update({
+                "suggested_categories": item.get("suggested_categories", []),
+                "existing_categories": sorted(existing_categories, key=str.casefold),
+                "conflict": item["name"] in presets,
+            })
+        return response
+
+    @app.post("/style_grid/share/import")
+    async def api_import_shared_item(data: dict):
+        try:
+            manifest, preview = _decode_shared_package(data)
+            item = manifest["item"]
+            requested_name = data.get("name", item["name"])
+            if not isinstance(requested_name, str) or not requested_name.strip():
+                raise SharePackageError("Name required")
+            final_name = requested_name.strip()
+            if len(final_name) > 200:
+                raise SharePackageError("Name must be 200 characters or fewer")
+            duplicate = data.get("duplicate", "copy")
+            if duplicate not in {"copy", "replace", "cancel"}:
+                raise SharePackageError("Duplicate handling is invalid")
+
+            if manifest["kind"] == "style":
+                category = data.get("category", "")
+                if not isinstance(category, str) or not category.strip():
+                    raise SharePackageError("Choose a category for the imported Style")
+                category = category.strip()
+                if len(category) > 100:
+                    raise SharePackageError("Category names must be 100 characters or fewer")
+                try:
+                    tags = normalize_style_tags(data.get("tags", []))
+                except ValueError as error:
+                    raise SharePackageError(str(error)) from error
+                targets = _style_share_targets(final_name)
+                target = next((entry for entry in targets if entry["id"] == data.get("target")), None)
+                if target is None:
+                    raise SharePackageError("Choose a valid destination collection")
+                sources = target["_sources"]
+                variants = {variant["format"]: variant for variant in item["variants"]}
+                operations = []
+                if "generic" in sources:
+                    variant = variants.get("generic") or variants.get("natural_language") or variants.get("tags")
+                    if variant:
+                        operations.append((sources["generic"], variant))
+                else:
+                    for fmt in ("natural_language", "tags"):
+                        if fmt not in sources:
+                            continue
+                        variant = variants.get(fmt) or variants.get("generic")
+                        if variant is None and len(variants) == 1:
+                            variant = next(iter(variants.values()))
+                        if variant is not None:
+                            operations.append((sources[fmt], variant))
+                if not operations:
+                    raise SharePackageError("Package prompt formats do not match the destination")
+
+                source_keys = {os.path.normcase(os.path.abspath(path)) for path, _ in operations}
+                existing_names = {
+                    str(style.get("name") or "")
+                    for style in get_cached_styles()
+                    if os.path.normcase(os.path.abspath(style.get("source_file") or "")) in source_keys
+                }
+                conflict = final_name in existing_names
+                if conflict and duplicate == "cancel":
+                    raise SharePackageError("An item with that name already exists")
+                if conflict and duplicate == "copy":
+                    base_name = f"{final_name} Copy"
+                    final_name = base_name
+                    copy_number = 2
+                    while final_name in existing_names:
+                        final_name = f"{base_name} {copy_number}"
+                        copy_number += 1
+
+                backup_csv_files()
+                for target_path, variant in operations:
+                    save_style_to_csv(
+                        final_name,
+                        variant.get("prompt", ""),
+                        variant.get("negative_prompt", ""),
+                        item.get("description", ""),
+                        target_path,
+                        category=category,
+                        organizer_tags=tags,
+                    )
+                    if preview is not None:
+                        with open(get_thumbnail_path(final_name, target_path), "wb") as image_file:
+                            image_file.write(preview)
+                return {"ok": True, "kind": "style", "name": final_name, "rows": len(operations)}
+
+            presets = load_presets()
+            try:
+                categories = normalize_categories(data.get("categories", []))
+            except ValueError as error:
+                raise SharePackageError(str(error)) from error
+            conflict = final_name in presets
+            if conflict and duplicate == "cancel":
+                raise SharePackageError("A preset with that name already exists")
+            if conflict and duplicate == "copy":
+                base_name = f"{final_name} Copy"
+                final_name = base_name
+                copy_number = 2
+                while final_name in presets:
+                    final_name = f"{base_name} {copy_number}"
+                    copy_number += 1
+            backup_csv_files()
+            preset = {
+                "styles": [],
+                "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "mode": "scene",
+                "prompt": item.get("prompt", ""),
+                "negative_prompt": item.get("negative_prompt", ""),
+            }
+            if item.get("description"):
+                preset["description"] = item["description"]
+            if categories:
+                preset["categories"] = categories
+            presets[final_name] = preset
+            save_presets(presets)
+            if preview is not None:
+                with open(_preset_thumbnail_path(final_name), "wb") as image_file:
+                    image_file.write(preview)
+            return {"ok": True, "kind": "preset", "name": final_name}
+        except SharePackageError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 def register_api(demo, app):
     """
     Register all Forgeventory API groups on FastAPI app.
@@ -1118,4 +1434,5 @@ def register_api(demo, app):
     _register_lora_routes(app)
     _register_crud_routes(app)
     _register_thumbnail_routes(app)
+    _register_share_routes(app)
     _register_ui_routes(app)

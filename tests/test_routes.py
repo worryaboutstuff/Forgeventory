@@ -39,6 +39,7 @@ def style_grid_client(tmp_csv, monkeypatch):
     from stylegrid import cache as sg_cache
     from stylegrid import config as sg_config
     from stylegrid import csv_io as sg_csv_io
+    from stylegrid import routes as sg_routes
     from stylegrid import thumbnails as sg_thumbs
 
     monkeypatch.setattr(
@@ -53,6 +54,11 @@ def style_grid_client(tmp_csv, monkeypatch):
     )
     monkeypatch.setattr(
         sg_cache,
+        "get_all_styles_file_paths",
+        fake_get_all_styles_file_paths,
+    )
+    monkeypatch.setattr(
+        sg_routes,
         "get_all_styles_file_paths",
         fake_get_all_styles_file_paths,
     )
@@ -499,3 +505,210 @@ def test_ui_html_uses_installed_extension_folder(monkeypatch, tmp_path):
     assert "/file=extensions/Forgeventory/ui/dist/assets/index.js?v=" in html
     assert "/file=extensions/Forgeventory/ui/dist/assets/index.css?v=" in html
     assert "sd-webui-style-organizer/ui/dist" not in html
+
+
+def test_shared_style_export_and_import_assigns_local_metadata(
+    style_grid_client,
+    monkeypatch,
+    tmp_csv,
+    tmp_path,
+):
+    import base64
+
+    from stylegrid import csv_io, routes
+    from stylegrid.sharing import create_share_package, read_share_package
+
+    exported = style_grid_client.get(
+        "/style_grid/share/style",
+        params={"name": "Test Style A", "source": "styles.csv"},
+    )
+    assert exported.status_code == 200
+    assert exported.headers["content-type"].startswith("application/vnd.forgeventory.item+zip")
+    exported_manifest, exported_preview = read_share_package(exported.content)
+    assert exported_manifest["kind"] == "style"
+    assert exported_manifest["item"]["variants"][0]["prompt"] == "(tag_a:1.2)"
+    assert exported_preview is None
+
+    preview = b"RIFF\x08\x00\x00\x00WEBPVP8 "
+    manifest = {
+        "schema": "forgeventory.shared-item",
+        "version": 1,
+        "kind": "style",
+        "item": {
+            "name": "Imported Style",
+            "description": "Shared description",
+            "suggested_category": "Sender Category",
+            "suggested_tags": ["Sender Tag"],
+            "variants": [{
+                "format": "generic",
+                "prompt": "portable prompt",
+                "negative_prompt": "portable negative",
+            }],
+        },
+    }
+    encoded = base64.b64encode(create_share_package(manifest, preview)).decode("ascii")
+    preview_path = tmp_path / "imported.webp"
+    monkeypatch.setattr(routes, "backup_csv_files", lambda: True)
+    monkeypatch.setattr(routes, "get_thumbnail_path", lambda _name, _source="": str(preview_path))
+
+    inspected = style_grid_client.post(
+        "/style_grid/share/inspect",
+        json={"package": encoded},
+    )
+    assert inspected.status_code == 200
+    target = inspected.json()["targets"][0]["id"]
+    imported = style_grid_client.post(
+        "/style_grid/share/import",
+        json={
+            "package": encoded,
+            "name": "Imported Style",
+            "target": target,
+            "category": "Local Category",
+            "tags": ["Local Tag", "Blue"],
+            "duplicate": "copy",
+        },
+    )
+    assert imported.status_code == 200
+    assert imported.json()["name"] == "Imported Style"
+
+    row = next(
+        style for style in csv_io.parse_styles_csv(str(tmp_csv))
+        if style["name"] == "Imported Style"
+    )
+    assert row["category_explicit"] == "Local Category"
+    assert row["organizer_tags"] == ["Local Tag", "Blue"]
+    assert row["prompt"] == "portable prompt"
+    assert preview_path.read_bytes() == preview
+
+
+def test_shared_style_export_ignores_an_invalid_optional_preview(
+    style_grid_client,
+    monkeypatch,
+    tmp_path,
+):
+    from stylegrid import routes
+    from stylegrid.sharing import read_share_package
+
+    invalid_preview = tmp_path / "not-really-webp.webp"
+    invalid_preview.write_bytes(b"not an image")
+    monkeypatch.setattr(routes, "get_thumbnail_path", lambda _name, _source="": str(invalid_preview))
+
+    exported = style_grid_client.get(
+        "/style_grid/share/style",
+        params={"name": "Test Style A", "source": "styles.csv"},
+    )
+
+    assert exported.status_code == 200
+    _manifest, preview = read_share_package(exported.content)
+    assert preview is None
+
+
+def test_shared_preset_import_is_always_a_self_contained_scene(
+    style_grid_client,
+    monkeypatch,
+    tmp_path,
+):
+    import base64
+
+    from stylegrid import routes
+    from stylegrid.sharing import create_share_package
+
+    manifest = {
+        "schema": "forgeventory.shared-item",
+        "version": 1,
+        "kind": "preset",
+        "item": {
+            "name": "Shared Scene",
+            "description": "Portable scene preset",
+            "prompt": "resolved positive prompt",
+            "negative_prompt": "resolved negative prompt",
+            "suggested_categories": ["Sender Group"],
+        },
+    }
+    preview = b"RIFF\x08\x00\x00\x00WEBPVP8 "
+    encoded = base64.b64encode(create_share_package(manifest, preview)).decode("ascii")
+    stored = {}
+    monkeypatch.setattr(routes, "load_presets", lambda: dict(stored))
+    monkeypatch.setattr(routes, "save_presets", lambda presets: stored.update(presets))
+    monkeypatch.setattr(routes, "backup_csv_files", lambda: True)
+    preview_path = tmp_path / "preset.webp"
+    monkeypatch.setattr(routes, "_preset_thumbnail_path", lambda _name: str(preview_path))
+
+    imported = style_grid_client.post(
+        "/style_grid/share/import",
+        json={
+            "package": encoded,
+            "name": "Shared Scene",
+            "categories": ["Local Group"],
+            "duplicate": "copy",
+        },
+    )
+
+    assert imported.status_code == 200
+    assert stored["Shared Scene"] == {
+        "styles": [],
+        "created": stored["Shared Scene"]["created"],
+        "mode": "scene",
+        "prompt": "resolved positive prompt",
+        "negative_prompt": "resolved negative prompt",
+        "description": "Portable scene preset",
+        "categories": ["Local Group"],
+    }
+    assert preview_path.read_bytes() == preview
+
+
+def test_shared_generic_style_populates_both_prompt_formats(
+    style_grid_client,
+    monkeypatch,
+    tmp_path,
+):
+    import base64
+
+    from stylegrid import csv_io, routes
+    from stylegrid.sharing import create_share_package
+
+    natural_path = tmp_path / "Forgeventory - Natural Language.csv"
+    tags_path = tmp_path / "Forgeventory - Tags.csv"
+    header = "name,prompt,negative_prompt,description,category,organizer_tags\n"
+    natural_path.write_text(header, encoding="utf-8")
+    tags_path.write_text(header, encoding="utf-8")
+    monkeypatch.setattr(routes, "get_all_styles_file_paths", lambda: [str(natural_path), str(tags_path)])
+    monkeypatch.setattr(csv_io, "get_all_styles_file_paths", lambda: [str(natural_path), str(tags_path)])
+    monkeypatch.setattr(routes, "backup_csv_files", lambda: True)
+
+    manifest = {
+        "schema": "forgeventory.shared-item",
+        "version": 1,
+        "kind": "style",
+        "item": {
+            "name": "Generic Shared Style",
+            "description": "Portable generic prompt",
+            "suggested_category": "Sender Category",
+            "suggested_tags": [],
+            "variants": [{
+                "format": "generic",
+                "prompt": "portable prompt",
+                "negative_prompt": "portable negative",
+            }],
+        },
+    }
+    encoded = base64.b64encode(create_share_package(manifest)).decode("ascii")
+    inspected = style_grid_client.post("/style_grid/share/inspect", json={"package": encoded})
+
+    imported = style_grid_client.post(
+        "/style_grid/share/import",
+        json={
+            "package": encoded,
+            "target": inspected.json()["targets"][0]["id"],
+            "category": "Local Category",
+            "tags": [],
+            "duplicate": "copy",
+        },
+    )
+
+    assert imported.status_code == 200
+    assert imported.json()["rows"] == 2
+    for path in (natural_path, tags_path):
+        row = csv_io.parse_styles_csv(str(path))[0]
+        assert row["name"] == "Generic Shared Style"
+        assert row["prompt"] == "portable prompt"

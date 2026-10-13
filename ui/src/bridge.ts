@@ -23,6 +23,7 @@ export type FrameMessage =
   | { type: 'SG_EDIT_STYLE';      styleId: string }
   | { type: 'SG_REPLACE_STYLE_PROMPTS'; styleId: string; source?: string }
   | { type: 'SG_DUPLICATE_STYLE'; styleId: string }
+  | { type: 'SG_EXPORT_STYLE_ITEM'; styleId: string; source?: string }
   | { type: 'SG_MOVE_TO_CATEGORY'; styleId: string }
   | { type: 'SG_BATCH_EDIT_STYLE_CATEGORIES'; styles: { name: string; source: string; category: string }[] }
   | { type: 'SG_BATCH_EDIT_STYLE_TAGS'; styles: { name: string; source: string; organizer_tags: string[] }[] }
@@ -45,6 +46,7 @@ export type FrameMessage =
   | { type: 'SG_RENAME_PRESET'; name: string }
   | { type: 'SG_REPLACE_PRESET_PROMPTS'; name: string }
   | { type: 'SG_DUPLICATE_PRESET'; name: string }
+  | { type: 'SG_EXPORT_PRESET_ITEM'; name: string; source?: string }
   | { type: 'SG_DELETE_PRESET'; name: string }
   | { type: 'SG_APPLY_LORA'; id: string; name: string; token: string; prompt: string; negativePrompt: string }
   | { type: 'SG_EDIT_LORA_METADATA'; name: string }
@@ -54,6 +56,7 @@ export type FrameMessage =
   | { type: 'SG_BACKUP' }
   | { type: 'SG_OPEN_LORA_FOLDER' }
   | { type: 'SG_IMPORT_EXPORT' }
+  | { type: 'SG_IMPORT_SHARED_ITEM' }
   | { type: 'SG_NEW_STYLE'; sourceFile?: string }
   | { type: 'SG_CSV_EDITOR' }
   | { type: 'SG_CLEAR_ALL' }

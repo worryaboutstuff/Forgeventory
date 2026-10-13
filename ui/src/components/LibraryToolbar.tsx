@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { DropdownMenu } from 'radix-ui'
 import {
   Archive, ArrowDownUp, BookMarked, Check, Columns3, Dice5, Ellipsis,
-  Eye, FolderDown, Github, Maximize2, Minimize2, Plus, RefreshCw, Settings2, Trash2, X,
+  Eye, FolderDown, Github, Maximize2, Minimize2, Plus, RefreshCw, Settings2, Trash2, Upload, X,
 } from 'lucide-react'
 import { sendToHost } from '../bridge'
 import { useStylesStore } from '../store/stylesStore'
@@ -75,7 +75,8 @@ export function LibraryMenu({ children, grouped, setGrouped, isFullscreen, toggl
           </DropdownMenu.Item>
           <DropdownMenu.Item className="sg-menu-item" onSelect={() => sendToHost({ type: 'SG_BACKUP' })}><Archive size={16} /> Back up CSV</DropdownMenu.Item>
           <DropdownMenu.Item className="sg-menu-item" onSelect={() => sendToHost({ type: 'SG_OPEN_LORA_FOLDER' })}><FolderDown size={16} /> Open LoRA folder</DropdownMenu.Item>
-          <DropdownMenu.Item className="sg-menu-item" onSelect={() => sendToHost({ type: 'SG_IMPORT_EXPORT' })}><FolderDown size={16} /> Import / export</DropdownMenu.Item>
+          <DropdownMenu.Item className="sg-menu-item" onSelect={() => sendToHost({ type: 'SG_IMPORT_SHARED_ITEM' })}><Upload size={16} /> Import shared item...</DropdownMenu.Item>
+          <DropdownMenu.Item className="sg-menu-item" onSelect={() => sendToHost({ type: 'SG_IMPORT_EXPORT' })}><FolderDown size={16} /> Full library import / export</DropdownMenu.Item>
           <DropdownMenu.CheckboxItem className="sg-menu-item" checked={silentMode} onCheckedChange={toggleSilent}>
             <Eye size={16} /> Silent mode
             <DropdownMenu.ItemIndicator className="sg-menu-check"><Check size={15} /></DropdownMenu.ItemIndicator>

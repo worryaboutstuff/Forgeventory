@@ -734,6 +734,66 @@ The host UI (`SG_BACKUP` in `javascript/style_grid.js`) should treat `{ "error":
 
 **Error cases:** None explicitly returned as `{error}`.
 
+## GET /share/style
+
+**Method:** GET
+**Description:** Exports one Style as a portable `.forgeventory` ZIP package. Matching Natural Language and Tags rows from the same source family are included together. The first available source-aware WebP thumbnail is embedded as `preview.webp`.
+
+| name | in | required | type | description |
+| --- | --- | --- | --- | --- |
+| `name` | query | Yes | string | Exact Style name. |
+| `source` | query | No | string | Source CSV path or basename used to select the intended duplicate and its paired format. |
+
+**Response:** Binary `application/vnd.forgeventory.item+zip` attachment containing `manifest.json` and, when available, `preview.webp`.
+
+**Error cases:** HTTP `422` when the Style cannot be found or the package cannot be created.
+
+## GET /share/preset
+
+**Method:** GET
+**Description:** Exports one preset as a portable `.forgeventory` package. Style-list presets are resolved into standalone positive and negative prompt text; the package never contains references that require the recipient to own matching Styles. An assigned WebP preview is embedded when available.
+
+| name | in | required | type | description |
+| --- | --- | --- | --- | --- |
+| `name` | query | Yes | string | Exact preset name. |
+| `source` | query | No | string | Active Style source used while flattening a Style-list preset. |
+
+**Response:** Binary `application/vnd.forgeventory.item+zip` attachment.
+
+**Error cases:** HTTP `404` when the preset is missing; HTTP `422` when a referenced Style is unavailable or the package cannot be created.
+
+## POST /share/inspect
+
+**Method:** POST
+**Description:** Validates a shared-item package and returns safe metadata for the import dialog without writing library files. Absolute sender and recipient paths are never returned.
+
+| name | in | required | type | description |
+| --- | --- | --- | --- | --- |
+| `package` | body | Yes | string | Base64 package bytes, optionally as a browser data URL. |
+
+**Response:** Common fields are `kind`, `name`, `description`, and `has_preview`. Style responses also include prompt formats, local destination collections, category/tag suggestions, and existing local categories/tags. Preset responses include category suggestions, existing local categories, and a name-conflict flag.
+
+**Error cases:** HTTP `422` for invalid Base64, an unsupported schema/version, malformed metadata, unsupported ZIP members, or package/manifest/preview size violations.
+
+## POST /share/import
+
+**Method:** POST
+**Description:** Imports a validated package using recipient-selected metadata. Style packages write only to the chosen local collection; paired destinations receive both prompt formats. Presets are always stored as self-contained scene prompts.
+
+| name | in | required | type | description |
+| --- | --- | --- | --- | --- |
+| `package` | body | Yes | string | The same Base64 package inspected by `/share/inspect`. |
+| `name` | body | No | string | Editable local name; defaults to the package name. |
+| `duplicate` | body | Yes | string | `copy`, `replace`, or `cancel`. |
+| `target` | body | Style only | string | Opaque destination collection ID returned by `/share/inspect`. |
+| `category` | body | Style only | string | Required local Style category. |
+| `tags` | body | Style only | array[string] | Optional local organizer tags. |
+| `categories` | body | Preset only | array[string] | Optional local preset categories. |
+
+**Response:** `{ "ok": true, "kind": "style|preset", "name": "..." }`; Style responses also include the number of CSV rows written.
+
+**Error cases:** HTTP `422` for invalid packages or fields, incompatible destinations, or a conflict handled with `cancel`.
+
 ## POST /category_order/save
 
 **Method:** POST  

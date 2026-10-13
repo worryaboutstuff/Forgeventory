@@ -185,6 +185,12 @@ export const StyleCard = memo(function StyleCard({ style, presetName, presetCate
               </button>
               <button
                 className="w-full text-left px-3 py-1.5 text-sm text-sg-text hover:bg-sg-accent/20 transition-colors"
+                onClick={() => { sendToHost({ type: 'SG_EXPORT_PRESET_ITEM', name: presetName, source: activeSource || undefined }); setMenuPos(null) }}
+              >
+                Export...
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-sm text-sg-text hover:bg-sg-accent/20 transition-colors"
                 onClick={() => {
                   sendToHost({
                     type: 'SG_EDIT_PRESET_CATEGORIES',
@@ -276,6 +282,12 @@ export const StyleCard = memo(function StyleCard({ style, presetName, presetCate
               onClick={() => { sendToHost({ type: 'SG_DUPLICATE_STYLE', styleId: style.name }); setMenuPos(null) }}
             >
               📄 Duplicate
+            </button>
+            <button
+              className="w-full text-left px-3 py-1.5 text-sm text-sg-text hover:bg-sg-accent/20 transition-colors"
+              onClick={() => { sendToHost({ type: 'SG_EXPORT_STYLE_ITEM', styleId: style.name, source: style.source_file || undefined }); setMenuPos(null) }}
+            >
+              Export...
             </button>
             <button
               className="w-full text-left px-3 py-1.5 text-sm text-sg-text hover:bg-sg-accent/20 transition-colors"

@@ -17,6 +17,7 @@ This is a substantially modified fork of [Style Grid for Forge by KazeKaze93](ht
 - A recursive LoRA browser with in-place registry reload, direct sidecar previews, local multi-tag organization, multi-tag filtering, safe three-state batch tag editing, global tag rename, and same-basename model/sidecar renaming
 - Reusable prompt presets with multiple categories and optional thumbnails
 - Preset cards in the same browsing interface as styles, with multi-category filtering, safe three-state batch category editing, and global category rename
+- Portable single-Style and flattened-preset sharing with optional embedded previews and local category/tag assignment on import
 - `txt2img` and `img2img` support
 - CSV backup, import, and export tools
 - A shortcut for opening Forge's LoRA folder
@@ -52,6 +53,12 @@ Forgeventory inserts a readable token such as `{sg:Style Name}` into the prompt.
 Categories provide structure. The optional semicolon-separated `organizer_tags` field provides fine filtering across categories and never enters the generated prompt. Batch tag edits can preserve mixed values and mirror changes between paired Natural Language and Tags sheets.
 
 See [docs/CSV_FORMAT.md](docs/CSV_FORMAT.md) for the complete format.
+
+## Sharing individual items
+
+Right-click a Style or preset card and choose **Export...** to create one portable `.forgeventory` file. Style packages include paired Natural Language and Tags prompts when available. Preset packages contain resolved positive and negative text, so they do not depend on matching Style names in another installation. An existing WebP card preview is embedded when available.
+
+Import through **Library tools > Import shared item...**. Before writing anything, Forgeventory asks which local category and tags to use for a Style, or which local categories to use for a preset. Sender suggestions remain editable, and name conflicts can be copied, replaced, or canceled without changing the recipient's taxonomy.
 
 ## Private local data
 

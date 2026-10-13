@@ -676,6 +676,21 @@
     box-sizing: border-box;
 }
 .sg-editor-textarea:focus { border-color: var(--color-accent, #6366f1); }
+.sg-share-summary {
+    color: var(--body-text-color, #f3f4f6);
+    font-size: 14px;
+    font-weight: 600;
+}
+.sg-share-description,
+.sg-share-hint {
+    color: var(--body-text-color-subdued, #9ca3af);
+    font-size: 12px;
+    line-height: 1.45;
+}
+.sg-share-description {
+    max-height: 90px;
+    overflow-y: auto;
+}
 .sg-editor-btns { display: flex; gap: 8px; margin-top: 6px; }
 
 /* ---- CSV table editor (full-screen) — used when implementation is re-enabled ---- */

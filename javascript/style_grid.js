@@ -2938,6 +2938,229 @@ CSV table editor — full implementation kept for restoration; currently inactiv
         document.body.appendChild(overlay);
     }
 
+    function downloadSharedItem(tabName, kind, name, source) {
+        var endpoint = kind === "preset" ? "/style_grid/share/preset" : "/style_grid/share/style";
+        var params = new URLSearchParams({ name: name });
+        if (source) params.set("source", source);
+        fetch(endpoint + "?" + params.toString()).then(function (response) {
+            if (response.ok) {
+                return response.blob().then(function (blob) {
+                    var disposition = response.headers.get("Content-Disposition") || "";
+                    var match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+                    var filename = match ? decodeURIComponent(match[1]) : (name + ".forgeventory");
+                    var url = URL.createObjectURL(blob);
+                    var anchor = document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = filename;
+                    anchor.click();
+                    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+                    showStatusMessage(tabName, (kind === "preset" ? "Preset" : "Style") + " exported successfully");
+                });
+            }
+            return response.text().then(function (text) {
+                var message = "Export failed";
+                try {
+                    var body = JSON.parse(text);
+                    message = body.detail || body.error || message;
+                } catch (_error) { }
+                throw new Error(message);
+            });
+        }).catch(function (error) {
+            showStatusMessage(tabName, error.message || "Export failed", true);
+        });
+    }
+
+    function showSharedItemImportDialog(tabName, packageData, info) {
+        const overlay = el("div", { className: "sg-editor-overlay" });
+        const modal = el("div", { className: "sg-editor-modal" });
+        modal.appendChild(el("h3", {
+            className: "sg-editor-title",
+            textContent: "Import shared " + (info.kind === "preset" ? "preset" : "Style")
+        }));
+        modal.appendChild(el("div", {
+            className: "sg-share-summary",
+            textContent: info.name + (info.has_preview ? " - Preview included" : " - No preview")
+        }));
+        if (info.description) {
+            modal.appendChild(el("div", { className: "sg-share-description", textContent: info.description }));
+        }
+
+        const nameLabel = el("label", { className: "sg-editor-label", textContent: "Name" });
+        const nameInput = el("input", { className: "sg-editor-input", type: "text", value: info.name });
+        modal.appendChild(nameLabel);
+        modal.appendChild(nameInput);
+
+        var targetSelect = null;
+        var categoryInput = null;
+        var tagsInput = null;
+        var categoriesInput = null;
+        if (info.kind === "style") {
+            const targets = Array.isArray(info.targets) ? info.targets : [];
+            modal.appendChild(el("label", { className: "sg-editor-label", textContent: "Destination collection" }));
+            targetSelect = el("select", { className: "sg-editor-input" });
+            targets.forEach(function (target) {
+                var labels = (target.formats || []).map(function (format) {
+                    if (format === "natural_language") return "Natural Language";
+                    if (format === "tags") return "Tags";
+                    return "Generic";
+                });
+                targetSelect.appendChild(el("option", {
+                    value: target.id,
+                    textContent: target.label + (labels.length ? " (" + labels.join(" + ") + ")" : "")
+                }));
+            });
+            modal.appendChild(targetSelect);
+
+            var categoryListId = "sg-share-categories-" + Date.now();
+            modal.appendChild(el("label", { className: "sg-editor-label", textContent: "Category" }));
+            categoryInput = el("input", {
+                className: "sg-editor-input",
+                type: "text",
+                value: info.suggested_category || "",
+                list: categoryListId,
+                placeholder: "Choose or enter one category"
+            });
+            modal.appendChild(categoryInput);
+            var categoryList = el("datalist", { id: categoryListId });
+            (info.existing_categories || []).forEach(function (category) {
+                categoryList.appendChild(el("option", { value: category }));
+            });
+            modal.appendChild(categoryList);
+
+            modal.appendChild(el("label", { className: "sg-editor-label", textContent: "Tags (semicolon-separated)" }));
+            tagsInput = el("input", {
+                className: "sg-editor-input",
+                type: "text",
+                value: (info.suggested_tags || []).join("; "),
+                placeholder: "Optional local tags"
+            });
+            modal.appendChild(tagsInput);
+            if ((info.existing_tags || []).length) {
+                modal.appendChild(el("div", {
+                    className: "sg-share-hint",
+                    textContent: "Existing tags: " + info.existing_tags.join(", ")
+                }));
+            }
+        } else {
+            var presetListId = "sg-share-preset-categories-" + Date.now();
+            modal.appendChild(el("label", { className: "sg-editor-label", textContent: "Preset categories (comma-separated)" }));
+            categoriesInput = el("input", {
+                className: "sg-editor-input",
+                type: "text",
+                value: (info.suggested_categories || []).join(", "),
+                list: presetListId,
+                placeholder: "Optional local categories"
+            });
+            modal.appendChild(categoriesInput);
+            var presetList = el("datalist", { id: presetListId });
+            (info.existing_categories || []).forEach(function (category) {
+                presetList.appendChild(el("option", { value: category }));
+            });
+            modal.appendChild(presetList);
+        }
+
+        modal.appendChild(el("label", { className: "sg-editor-label", textContent: "If the name already exists" }));
+        const duplicateSelect = el("select", { className: "sg-editor-input" });
+        duplicateSelect.appendChild(el("option", { value: "copy", textContent: "Import as a copy" }));
+        duplicateSelect.appendChild(el("option", { value: "replace", textContent: "Replace the existing item" }));
+        duplicateSelect.appendChild(el("option", { value: "cancel", textContent: "Cancel the import" }));
+        modal.appendChild(duplicateSelect);
+
+        function closeDialog() {
+            document.removeEventListener("keydown", onKeyDown);
+            overlay.remove();
+        }
+        function finishImport(result) {
+            closeDialog();
+            var notify = state[tabName] && state[tabName].refreshAndNotifyFrame;
+            if (typeof notify === "function") notify();
+            if (result.kind === "preset") {
+                apiGet("/style_grid/presets").then(function (presets) {
+                    state[tabName].presets = presets || {};
+                    var frame = document.getElementById("sg-frame-" + tabName);
+                    if (frame && frame.contentWindow) {
+                        frame.contentWindow.postMessage({ type: "SG_PRESETS_UPDATED" }, "*");
+                    }
+                }).catch(function () {});
+            }
+            showStatusMessage(tabName, (result.kind === "preset" ? "Preset" : "Style") + " imported as \"" + result.name + "\"");
+        }
+        function submitImport() {
+            var payload = {
+                package: packageData,
+                name: (nameInput.value || "").trim(),
+                duplicate: duplicateSelect.value
+            };
+            if (!payload.name) {
+                nameInput.focus();
+                return;
+            }
+            if (info.kind === "style") {
+                payload.target = targetSelect ? targetSelect.value : "";
+                payload.category = categoryInput ? (categoryInput.value || "").trim() : "";
+                payload.tags = tagsInput ? tagsInput.value.split(";").map(function (tag) { return tag.trim(); }).filter(Boolean) : [];
+                if (!payload.target || !payload.category) {
+                    (payload.target ? categoryInput : targetSelect).focus();
+                    return;
+                }
+            } else {
+                payload.categories = categoriesInput ? categoriesInput.value.split(",").map(function (category) { return category.trim(); }).filter(Boolean) : [];
+            }
+            importButton.disabled = true;
+            importButton.textContent = "Importing...";
+            apiPost("/style_grid/share/import", payload).then(assertNoApiError).then(finishImport).catch(function (error) {
+                importButton.disabled = false;
+                importButton.textContent = "Import";
+                showStatusMessage(tabName, "Import failed: " + (error.message || "unknown error"), true);
+            });
+        }
+        function onKeyDown(event) {
+            if (event.key === "Escape") closeDialog();
+        }
+        const buttons = el("div", { className: "sg-editor-btns" });
+        const importButton = el("button", { className: "sg-btn sg-btn-primary", textContent: "Import", onClick: submitImport });
+        buttons.appendChild(importButton);
+        buttons.appendChild(el("button", { className: "sg-btn sg-btn-secondary", textContent: "Cancel", onClick: closeDialog }));
+        modal.appendChild(buttons);
+        overlay.appendChild(modal);
+        overlay.addEventListener("mousedown", function (event) {
+            if (event.target === overlay) closeDialog();
+        });
+        document.addEventListener("keydown", onKeyDown);
+        document.body.appendChild(overlay);
+        nameInput.focus();
+        nameInput.select();
+    }
+
+    function chooseSharedItemFile(tabName) {
+        const input = el("input", {
+            type: "file",
+            accept: ".forgeventory,application/vnd.forgeventory.item+zip,application/zip"
+        });
+        input.addEventListener("change", function () {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            if (file.size > 4 * 1024 * 1024) {
+                showStatusMessage(tabName, "Shared-item package is too large", true);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function () {
+                const packageData = typeof reader.result === "string" ? reader.result : "";
+                apiPost("/style_grid/share/inspect", { package: packageData }).then(assertNoApiError).then(function (info) {
+                    showSharedItemImportDialog(tabName, packageData, info);
+                }).catch(function (error) {
+                    showStatusMessage(tabName, "Cannot open shared item: " + (error.message || "unknown error"), true);
+                });
+            };
+            reader.onerror = function () {
+                showStatusMessage(tabName, "Could not read the selected file", true);
+            };
+            reader.readAsDataURL(file);
+        });
+        input.click();
+    }
+
     // -----------------------------------------------------------------------
     // Refresh panel (rebuild from API data)
     // -----------------------------------------------------------------------
@@ -5336,6 +5559,15 @@ CSV table editor — full implementation kept for restoration; currently inactiv
             }
             if (msg.type === "SG_IMPORT_EXPORT") {
                 showExportImport(tab);
+            }
+            if (msg.type === "SG_IMPORT_SHARED_ITEM") {
+                chooseSharedItemFile(tab);
+            }
+            if (msg.type === "SG_EXPORT_STYLE_ITEM") {
+                downloadSharedItem(tab, "style", msg.styleId, msg.source || "");
+            }
+            if (msg.type === "SG_EXPORT_PRESET_ITEM") {
+                downloadSharedItem(tab, "preset", msg.name, msg.source || "");
             }
             if (msg.type === "SG_NEW_STYLE") {
                 openStyleEditor(tab, null, msg.sourceFile);
